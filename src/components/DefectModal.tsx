@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Defect, DefectCategory, DefectSeverity, UserProfile, VehicleZone } from '../types';
 import { 
   X, 
@@ -12,8 +12,10 @@ import {
   Cpu,
   Flame,
   Zap,
-  Gauge
+  Gauge,
+  QrCode
 } from 'lucide-react';
+import { QrScannerModal } from './QrScannerModal';
 
 interface DefectModalProps {
   isOpen: boolean;
@@ -21,6 +23,8 @@ interface DefectModalProps {
   onSubmit: (defect: Partial<Defect>) => void;
   currentUser: UserProfile;
   initialZone?: VehicleZone | null;
+  initialVin?: string;
+  initialPart?: string;
 }
 
 const CATEGORIES: { label: DefectCategory; icon: any }[] = [
@@ -65,6 +69,8 @@ export const DefectModal: React.FC<DefectModalProps> = ({
   onSubmit,
   currentUser,
   initialZone,
+  initialVin,
+  initialPart,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -73,10 +79,18 @@ export const DefectModal: React.FC<DefectModalProps> = ({
   const [station, setStation] = useState(currentUser.station || STATIONS[2]);
   const [line, setLine] = useState('Chassis Line 2');
   const [vehicleZone, setVehicleZone] = useState<VehicleZone>(initialZone || 'underbody_battery');
-  const [vinOrUnitId, setVinOrUnitId] = useState(`VIN-WAUZZZ-${Math.floor(10000 + Math.random() * 90000)}`);
-  const [partNumber, setPartNumber] = useState('N-911-470-01');
+  const [vinOrUnitId, setVinOrUnitId] = useState(initialVin || `VIN-WAUZZZ-${Math.floor(10000 + Math.random() * 90000)}`);
+  const [partNumber, setPartNumber] = useState(initialPart || 'N-911-470-01');
   const [andonTriggered, setAndonTriggered] = useState(false);
   const [imageUrl, setImageUrl] = useState<string>('/src/assets/images/vehicle_inspection_chassis_1794069669791.jpg');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerTarget, setScannerTarget] = useState<'vin' | 'part'>('vin');
+
+  // Keep synced if initialVin changes
+  useEffect(() => {
+    if (initialVin) setVinOrUnitId(initialVin);
+    if (initialPart) setPartNumber(initialPart);
+  }, [initialVin, initialPart]);
 
   if (!isOpen) return null;
 
@@ -311,14 +325,27 @@ export const DefectModal: React.FC<DefectModalProps> = ({
                 <label className="text-xs font-semibold text-slate-300">
                   Vehicle VIN / Chassis ID
                 </label>
-                <button
-                  type="button"
-                  onClick={handleSimulateScan}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                >
-                  <Scan className="w-3 h-3" />
-                  <span>Scan Barcode</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScannerTarget('vin');
+                      setIsScannerOpen(true);
+                    }}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>Scan VIN Tag</span>
+                  </button>
+                  <span className="text-slate-600">·</span>
+                  <button
+                    type="button"
+                    onClick={handleSimulateScan}
+                    className="text-[11px] text-slate-400 hover:text-slate-300"
+                  >
+                    Random
+                  </button>
+                </div>
               </div>
               <input
                 type="text"
@@ -329,9 +356,22 @@ export const DefectModal: React.FC<DefectModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Part / Subassembly Number
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-300">
+                  Part / Subassembly Number
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScannerTarget('part');
+                    setIsScannerOpen(true);
+                  }}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
+                >
+                  <Scan className="w-3.5 h-3.5" />
+                  <span>Scan Part Barcode</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={partNumber}
@@ -414,6 +454,20 @@ export const DefectModal: React.FC<DefectModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Child QR / Barcode Scanner Modal */}
+      <QrScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        defaultMode={scannerTarget}
+        onScanComplete={(scanned) => {
+          if (scannerTarget === 'vin') {
+            setVinOrUnitId(scanned.code);
+          } else {
+            setPartNumber(scanned.code);
+          }
+        }}
+      />
     </div>
   );
 };

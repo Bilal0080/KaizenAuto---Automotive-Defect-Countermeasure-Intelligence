@@ -10,7 +10,8 @@ import {
   HelpCircle, 
   PlusCircle,
   Bell,
-  CloudUpload
+  CloudUpload,
+  QrCode
 } from 'lucide-react';
 import { LanguageCode, UserProfile } from '../types';
 import { translations } from '../i18n/translations';
@@ -29,6 +30,7 @@ interface HeaderProps {
   onOpenOnboarding: () => void;
   onOpenNewDefect: () => void;
   onOpenCloudBackup: () => void;
+  onOpenQrScanner: () => void;
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
@@ -47,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenOnboarding,
   onOpenNewDefect,
   onOpenCloudBackup,
+  onOpenQrScanner,
   activeTab,
   onTabChange,
 }) => {
@@ -172,8 +175,18 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
 
-          {/* Plant Tools: Network, Alerts, Language, Theme, Help */}
+          {/* Plant Tools: Network, QR Scan, Alerts, Language, Theme, Help */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Quick QR & Barcode Scanner */}
+            <button
+              onClick={onOpenQrScanner}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-amber-400 border border-slate-700/60 text-xs font-semibold transition-colors"
+              title="Quick Scan Vehicle VIN or Part QR Code"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Scan Barcode / QR</span>
+            </button>
+
             {/* Offline Simulator Switch */}
             <button
               onClick={onToggleOffline}

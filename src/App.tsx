@@ -14,6 +14,7 @@ import { AuthModal } from './components/AuthModal';
 import { CloudBackupModal } from './components/CloudBackupModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { OfflineSyncBanner } from './components/OfflineSyncBanner';
+import { QrScannerModal } from './components/QrScannerModal';
 import { 
   ShieldAlert, 
   Wrench, 
@@ -22,7 +23,8 @@ import {
   CheckCircle, 
   Crosshair, 
   Layers,
-  ArrowRight
+  ArrowRight,
+  QrCode
 } from 'lucide-react';
 
 export default function App() {
@@ -43,6 +45,8 @@ export default function App() {
   const [isCloudBackupOpen, setIsCloudBackupOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [scannedVinForModal, setScannedVinForModal] = useState<string | undefined>(undefined);
 
   const t = translations[lang] || translations.en;
 
@@ -125,6 +129,22 @@ export default function App() {
     setAlerts(updated);
   };
 
+  const handleGlobalScan = (scanned: { code: string; type: 'vin' | 'part' | 'station' }) => {
+    // Check if an existing defect has this VIN or part number
+    const existing = defects.find(
+      (d) =>
+        d.vinOrUnitId.toLowerCase() === scanned.code.toLowerCase() ||
+        (d.partNumber && d.partNumber.toLowerCase() === scanned.code.toLowerCase())
+    );
+
+    if (existing) {
+      setSelectedDefect(existing);
+    } else {
+      setScannedVinForModal(scanned.code);
+      setIsDefectModalOpen(true);
+    }
+  };
+
   const unreadAlertCount = alerts.filter((a) => !a.read).length;
   const criticalCount = defects.filter((d) => d.severity === 'critical' && d.status !== 'closed').length;
 
@@ -143,8 +163,12 @@ export default function App() {
         onOpenAlerts={() => setActiveTab('andon')}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
-        onOpenNewDefect={() => setIsDefectModalOpen(true)}
+        onOpenNewDefect={() => {
+          setScannedVinForModal(undefined);
+          setIsDefectModalOpen(true);
+        }}
         onOpenCloudBackup={() => setIsCloudBackupOpen(true)}
+        onOpenQrScanner={() => setIsQrScannerOpen(true)}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
@@ -188,11 +212,22 @@ export default function App() {
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                   <button
-                    onClick={() => setIsDefectModalOpen(true)}
+                    onClick={() => {
+                      setScannedVinForModal(undefined);
+                      setIsDefectModalOpen(true);
+                    }}
                     className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-2 shadow"
                   >
                     <span>{t.newDefect}</span>
                     <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => setIsQrScannerOpen(true)}
+                    className="px-4 py-2 bg-slate-800/90 hover:bg-slate-700 text-amber-400 font-semibold text-xs rounded-lg transition-colors flex items-center gap-2 border border-amber-500/30"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Scan VIN / QR Code</span>
                   </button>
 
                   <button
@@ -288,12 +323,24 @@ export default function App() {
                   Comprehensive log of all vehicle defects, torque anomalies, paint inclusions, and electrical issues.
                 </p>
               </div>
-              <button
-                onClick={() => setIsDefectModalOpen(true)}
-                className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 self-start shadow"
-              >
-                <span>{t.newDefect}</span>
-              </button>
+              <div className="flex items-center gap-2 self-start">
+                <button
+                  onClick={() => setIsQrScannerOpen(true)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold text-xs rounded-lg transition-colors flex items-center gap-1.5 border border-slate-700"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Scan Barcode / QR</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setScannedVinForModal(undefined);
+                    setIsDefectModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow"
+                >
+                  <span>{t.newDefect}</span>
+                </button>
+              </div>
             </div>
 
             <DefectList
@@ -361,10 +408,14 @@ export default function App() {
       {/* Modal 1: Defect Logging */}
       <DefectModal
         isOpen={isDefectModalOpen}
-        onClose={() => setIsDefectModalOpen(false)}
+        onClose={() => {
+          setIsDefectModalOpen(false);
+          setScannedVinForModal(undefined);
+        }}
         onSubmit={handleAddDefect}
         currentUser={currentUser}
         initialZone={selectedZone}
+        initialVin={scannedVinForModal}
       />
 
       {/* Modal 2: 8D Defect Deep Dive & Countermeasures */}
@@ -417,6 +468,13 @@ export default function App() {
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
         onStartDefect={() => setIsDefectModalOpen(true)}
+      />
+
+      {/* Modal 7: Optical QR & Barcode Scanner Module */}
+      <QrScannerModal
+        isOpen={isQrScannerOpen}
+        onClose={() => setIsQrScannerOpen(false)}
+        onScanComplete={handleGlobalScan}
       />
 
       {/* Footer */}
