@@ -1,0 +1,6 @@
+{
+  "name": "KaizenAuto - Automotive Defect & Countermeasure Intelligence",
+  "description": "Real-time automotive defect logging, 5-Why root cause analysis, Kaizen countermeasure tracking, Andon alerts, and production quality analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
