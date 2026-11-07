@@ -30,7 +30,6 @@ export interface SuggestedCountermeasureResponse {
 export const apiService = {
   async analyzeDefect(defect: Partial<Defect>, isOffline = false): Promise<AIAnalysisResult> {
     if (isOffline) {
-      // Local rule-based Kaizen fallback when offline
       return this.getLocalKaizenAnalysis(defect);
     }
 
@@ -151,3 +150,13 @@ export const apiService = {
     };
   },
 };
+
+export async function analyzeDefectWithAI(defect: Partial<Defect>, isOffline = false): Promise<{ result: AIAnalysisResult }> {
+  const result = await apiService.analyzeDefect(defect, isOffline);
+  return { result };
+}
+
+export async function suggestCountermeasures(defect: Partial<Defect>, isOffline = false): Promise<SuggestedCountermeasureResponse> {
+  return apiService.suggestCountermeasures(defect, isOffline);
+}
+

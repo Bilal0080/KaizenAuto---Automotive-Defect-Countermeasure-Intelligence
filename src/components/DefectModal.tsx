@@ -82,11 +82,10 @@ export const DefectModal: React.FC<DefectModalProps> = ({
   const [vinOrUnitId, setVinOrUnitId] = useState(initialVin || `VIN-WAUZZZ-${Math.floor(10000 + Math.random() * 90000)}`);
   const [partNumber, setPartNumber] = useState(initialPart || 'N-911-470-01');
   const [andonTriggered, setAndonTriggered] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string>('/src/assets/images/vehicle_inspection_chassis_1794069669791.jpg');
+  const [imageUrl, setImageUrl] = useState<string>('https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&q=80&w=800');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<'vin' | 'part'>('vin');
 
-  // Keep synced if initialVin changes
   useEffect(() => {
     if (initialVin) setVinOrUnitId(initialVin);
     if (initialPart) setPartNumber(initialPart);
@@ -138,7 +137,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-slate-100">
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
@@ -159,9 +157,7 @@ export const DefectModal: React.FC<DefectModalProps> = ({
           </button>
         </div>
 
-        {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Severity & Andon Quick Selector */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
               Defect Severity Level
@@ -226,7 +222,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
             </div>
           </div>
 
-          {/* Category Chips */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
               Defect Discipline / Category
@@ -254,7 +249,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
             </div>
           </div>
 
-          {/* Title & Description */}
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -284,7 +278,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
             </div>
           </div>
 
-          {/* Station, Line, VIN & Part Number */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -382,39 +375,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
             </div>
           </div>
 
-          {/* Photo Evidence Preview */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-2">
-              Visual Inspection Evidence (Shop Floor Photo)
-            </label>
-            <div className="flex items-center gap-4 p-3 bg-slate-950 border border-slate-800 rounded-xl">
-              <img
-                src={imageUrl}
-                alt="Defect visual evidence"
-                className="w-20 h-16 object-cover rounded-lg border border-slate-700"
-              />
-              <div className="space-y-1 text-xs">
-                <p className="font-medium text-slate-200">Attached Inspection Image</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setImageUrl(
-                        imageUrl.includes('chassis')
-                          ? '/src/assets/images/automotive_assembly_plant_1794069669601.jpg'
-                          : '/src/assets/images/vehicle_inspection_chassis_1794069669791.jpg'
-                      )
-                    }
-                    className="text-amber-400 hover:text-amber-300 text-[11px] underline"
-                  >
-                    Switch Image Preset
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Andon Cord Pull Indicator */}
           <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertOctagon className={`w-5 h-5 ${andonTriggered ? 'text-red-500 animate-pulse' : 'text-slate-500'}`} />
@@ -436,7 +396,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
             </button>
           </div>
 
-          {/* Submit Actions */}
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
@@ -455,7 +414,6 @@ export const DefectModal: React.FC<DefectModalProps> = ({
         </form>
       </div>
 
-      {/* Child QR / Barcode Scanner Modal */}
       <QrScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}

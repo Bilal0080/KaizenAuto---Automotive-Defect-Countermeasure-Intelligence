@@ -1,162 +1,151 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  ChevronRight, 
-  ChevronLeft, 
-  Check, 
-  AlertOctagon, 
-  Sparkles, 
-  Wrench, 
-  ShieldCheck,
-  Crosshair
-} from 'lucide-react';
+import { X, QrCode, AlertTriangle, Activity, CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface OnboardingModalProps {
-  isOpen: boolean;
   onClose: () => void;
-  onStartDefect: () => void;
+  onOpenScanner: () => void;
 }
 
-const STEPS = [
-  {
-    title: '1. Fast Defect Identification & Logging',
-    tagline: 'Log line issues in under 15 seconds',
-    icon: Crosshair,
-    color: 'text-amber-400 bg-amber-500/20',
-    description:
-      'Whether you are at chassis bolting, paint booth, or cockpit marriage, quickly select your station, scan or enter the VIN barcode, and mark the defect severity (Critical, Major, or Minor).',
-    tip: 'Tip: You can click directly on the interactive car blueprint wireframe to inspect defects by vehicle zone.',
-  },
-  {
-    title: '2. Instant Andon Line Stop & Supervisor Alert',
-    tagline: 'Empowerment to protect vehicle quality',
-    icon: AlertOctagon,
-    color: 'text-red-400 bg-red-500/20',
-    description:
-      'Pull the digital Andon cord whenever an out-of-spec torque, missing clip, or safety hazard threatens vehicle integrity. The system immediately pages the shift supervisor and logs the stop-line timestamp.',
-    tip: 'Tip: The supervisor receives real-time audio and visual alerts on the Andon board.',
-  },
-  {
-    title: '3. 5-Why & Ishikawa Root Cause Analysis',
-    tagline: 'Get to the true root cause, not just the symptom',
-    icon: Sparkles,
-    color: 'text-cyan-400 bg-cyan-500/20',
-    description:
-      'Use the built-in AI Kaizen engine or step-by-step 5-Why ladder to drill down from the surface observation to the fundamental process or tooling breakdown.',
-    tip: 'Tip: Click "Generate Kaizen Plan" inside any defect to get IATF 16949 compliant suggestions.',
-  },
-  {
-    title: '4. Countermeasures & 8D Verification',
-    tagline: 'Track containment, corrective, and preventive actions',
-    icon: Wrench,
-    color: 'text-emerald-400 bg-emerald-500/20',
-    description:
-      'Propose immediate interim containment (ICA) to protect the customer, implement permanent corrective actions (PCA), and update standard work instructions so the defect never happens again.',
-    tip: 'Tip: Generate printable 8D reports with one click for management audit and supplier review.',
-  },
-];
+export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose, onOpenScanner }) => {
+  const [step, setStep] = useState(0);
 
-export const OnboardingModal: React.FC<OnboardingModalProps> = ({
-  isOpen,
-  onClose,
-  onStartDefect,
-}) => {
-  const [currentStep, setCurrentStep] = useState(0);
+  const steps = [
+    {
+      title: 'Scan VIN or Part Barcode',
+      subtitle: 'Instant Optical Traceability',
+      icon: QrCode,
+      color: 'text-blue-500',
+      description:
+        'Use the built-in optical scanner on your mobile or shop-floor tablet to read 17-character VINs or AIAG 2D barcodes on parts. This auto-populates assembly station and vehicle model data.',
+      actionLabel: 'Try QR Scanner Now',
+      action: () => {
+        onClose();
+        onOpenScanner();
+      },
+    },
+    {
+      title: 'Rapid In-Station Defect Logging',
+      subtitle: 'Sub-30 Second Recording',
+      icon: AlertTriangle,
+      color: 'text-amber-500',
+      description:
+        'Select severity (Critical, Major, Minor), assign vehicle zone (CAD blueprint or drop-down), and record defect details. If severe, pull the digital Andon switch to stop the line immediately.',
+    },
+    {
+      title: '5-Why Root Cause & Ishikawa 6M',
+      subtitle: 'Toyota Production System (TPS) Kaizen',
+      icon: Activity,
+      color: 'text-purple-500',
+      description:
+        'Drill down through 5 levels of "Why" or use the AI Kaizen Advisor powered by Gemini to formulate interim containment (ICA) and permanent corrective action (PCA) within seconds.',
+    },
+    {
+      title: 'Close Loop Countermeasures & 8D Dossier',
+      subtitle: 'IATF 16949 / VDA Compliance',
+      icon: CheckCircle2,
+      color: 'text-emerald-500',
+      description:
+        'Assign owners to error-proofing Poka-Yoke countermeasures, track 100% verification across shifts, and generate printable 8D reports with a single click.',
+    },
+  ];
 
-  if (!isOpen) return null;
-
-  const step = STEPS[currentStep];
-  const Icon = step.icon;
-  const isLast = currentStep === STEPS.length - 1;
+  const currentStep = steps[step];
+  const Icon = currentStep.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl text-slate-100 flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 w-full max-w-lg p-6 shadow-2xl space-y-6 font-sans">
+        
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+        <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-amber-400" />
-            <h2 className="text-sm font-bold text-white">
-              KaizenAuto · Shop Floor Worker Guide
-            </h2>
+            <span className="font-mono text-xs px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">
+              STEP {step + 1} OF 4
+            </span>
+            <span className="text-xs font-mono uppercase text-zinc-500">
+              Operator Onboarding Guide
+            </span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Step Visual Body */}
-        <div className="p-6 space-y-6 flex-1">
-          <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${step.color}`}>
-              <Icon className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-mono font-bold text-amber-400 uppercase tracking-wider">
-                Step {currentStep + 1} of {STEPS.length}
-              </span>
-              <h3 className="text-lg font-bold text-white mt-0.5">{step.title}</h3>
-              <p className="text-xs font-medium text-slate-400">{step.tagline}</p>
-            </div>
+        {/* Step Body */}
+        <div className="text-center space-y-4 py-4">
+          <div className={`w-16 h-16 mx-auto rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center ${currentStep.color}`}>
+            <Icon className="w-8 h-8" />
           </div>
 
-          <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-            {step.description}
+          <div>
+            <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+              {currentStep.title}
+            </h3>
+            <p className="text-xs font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {currentStep.subtitle}
+            </p>
+          </div>
+
+          <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed max-w-md mx-auto">
+            {currentStep.description}
           </p>
 
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300">
-            {step.tip}
-          </div>
+          {currentStep.action && (
+            <button
+              onClick={currentStep.action}
+              className="mt-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-xs font-semibold uppercase tracking-wider inline-flex items-center gap-1.5 transition-colors"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>{currentStep.actionLabel}</span>
+            </button>
+          )}
+        </div>
 
-          {/* Progress dots */}
-          <div className="flex justify-center gap-2 pt-2">
-            {STEPS.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentStep(i)}
-                className={`h-1.5 rounded-full transition-all ${
-                  i === currentStep ? 'w-6 bg-amber-400' : 'w-1.5 bg-slate-700'
+        {/* Step Navigation Dots & Controls */}
+        <div className="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center gap-1.5">
+            {steps.map((_, idx) => (
+              <span
+                key={idx}
+                className={`w-2 h-2 transition-all ${
+                  step === idx
+                    ? 'w-6 bg-emerald-600'
+                    : 'bg-zinc-300 dark:bg-zinc-700'
                 }`}
               />
             ))}
           </div>
+
+          <div className="flex items-center gap-2">
+            {step > 0 && (
+              <button
+                onClick={() => setStep(step - 1)}
+                className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-mono flex items-center gap-1"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev</span>
+              </button>
+            )}
+
+            {step < steps.length - 1 ? (
+              <button
+                onClick={() => setStep(step + 1)}
+                className="px-4 py-1.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-semibold flex items-center gap-1"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-mono font-semibold uppercase tracking-wider"
+              >
+                Start Using KaizenAuto
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Footer actions */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
-          <button
-            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-            disabled={currentStep === 0}
-            className="px-3 py-1.5 text-xs text-slate-400 hover:text-white disabled:opacity-30 transition-colors flex items-center gap-1"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span>Previous</span>
-          </button>
-
-          {isLast ? (
-            <button
-              onClick={() => {
-                onClose();
-                onStartDefect();
-              }}
-              className="px-5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow"
-            >
-              <span>Get Started & Log Defect</span>
-              <Check className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              onClick={() => setCurrentStep(currentStep + 1)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center gap-1.5"
-            >
-              <span>Next Step</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

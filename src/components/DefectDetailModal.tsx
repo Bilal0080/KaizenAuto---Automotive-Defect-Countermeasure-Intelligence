@@ -4,55 +4,53 @@ import {
   Countermeasure, 
   FiveWhyAnalysis, 
   FishboneFactors, 
-  UserProfile, 
-  DefectStatus, 
-  DefectSeverity 
-} from '../types';
-import { apiService, AIAnalysisResult } from '../services/api';
+  DefectComment, 
+  UserRole,
+  DefectStatus
+} from '../types/index.ts';
+import { analyzeDefectWithAI, suggestCountermeasures } from '../services/api.ts';
 import { 
   X, 
-  Sparkles, 
-  CheckCircle, 
-  AlertTriangle, 
-  Clock, 
-  Send, 
   Wrench, 
+  Sparkles, 
+  Activity, 
+  CheckCircle, 
+  Clock, 
   Plus, 
-  Check, 
-  Printer, 
   FileText, 
-  ArrowRight,
-  ShieldCheck,
+  Send, 
+  ShieldAlert, 
+  AlertTriangle,
+  Lightbulb,
+  Check,
   RotateCcw
 } from 'lucide-react';
 
 interface DefectDetailModalProps {
   defect: Defect;
-  isOpen: boolean;
+  currentUserRole: UserRole;
+  currentUserName: string;
   onClose: () => void;
   onUpdateDefect: (updated: Defect) => void;
-  currentUser: UserProfile;
-  isOffline: boolean;
-  onOpenReport: (defect: Defect) => void;
+  onOpen8DReport: (defect: Defect) => void;
 }
 
 export const DefectDetailModal: React.FC<DefectDetailModalProps> = ({
   defect,
-  isOpen,
+  currentUserRole,
+  currentUserName,
   onClose,
   onUpdateDefect,
-  currentUser,
-  isOffline,
-  onOpenReport,
+  onOpen8DReport,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'fiveWhy' | 'fishbone' | 'countermeasures' | 'discussion'>('countermeasures');
+  const [activeTab, setActiveTab] = useState<'containment' | 'five_why' | 'fishbone' | 'countermeasures' | 'comments'>('containment');
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [commentText, setCommentText] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
 
-  // 5-Why state
+  // Five Why State
   const [fiveWhy, setFiveWhy] = useState<FiveWhyAnalysis>(
     defect.fiveWhy || {
-      why1: defect.title || '',
+      why1: '',
       why2: '',
       why3: '',
       why4: '',
@@ -62,796 +60,761 @@ export const DefectDetailModal: React.FC<DefectDetailModalProps> = ({
     }
   );
 
-  // Fishbone state
+  // Fishbone State
   const [fishbone, setFishbone] = useState<FishboneFactors>(
     defect.fishbone || {
-      man: ['Operator takt-time speed variance'],
-      machine: ['Torque gun clutch wear', 'Fixture play'],
-      method: ['Work instruction step skipped'],
-      material: ['Supplier coating variance'],
-      measurement: ['Calibration interval exceeded'],
-      milieu: ['Temperature swing in booth'],
+      man: [],
+      machine: [],
+      method: [],
+      material: [],
+      measurement: [],
+      milieu: [],
     }
   );
-  const [newFactorCategory, setNewFactorCategory] = useState<keyof FishboneFactors>('man');
-  const [newFactorText, setNewFactorText] = useState('');
+  const [newFishboneInput, setNewFishboneInput] = useState<{ category: keyof FishboneFactors; text: string }>({
+    category: 'man',
+    text: '',
+  });
 
-  // New countermeasure form
-  const [newCmType, setNewCmType] = useState<'containment' | 'corrective' | 'preventive'>('corrective');
-  const [newCmTitle, setNewCmTitle] = useState('');
-  const [newCmDesc, setNewCmDesc] = useState('');
-  const [newCmAssignee, setNewCmAssignee] = useState(currentUser.name);
+  // New Countermeasure State
+  const [showAddCm, setShowAddCm] = useState(false);
+  const [cmForm, setCmForm] = useState<{
+    type: 'containment' | 'corrective' | 'preventive';
+    title: string;
+    description: string;
+    assignedTo: string;
+    targetDate: string;
+  }>({
+    type: 'containment',
+    title: '',
+    description: '',
+    assignedTo: currentUserName,
+    targetDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+  });
 
-  if (!isOpen) return null;
+  // Comment State
+  const [commentText, setCommentText] = useState('');
 
-  const handleRunAiKaizen = async () => {
+  // AI Analysis Execution
+  const handleRunAiAnalysis = async () => {
     setIsAiLoading(true);
+    setAiError(null);
     try {
-      const result: AIAnalysisResult = await apiService.analyzeDefect(defect, isOffline);
-
-      // Populate 5-Why if available
-      if (result.fiveWhys && result.fiveWhys.length >= 5) {
-        const updated5Why: FiveWhyAnalysis = {
-          why1: result.fiveWhys[0] || fiveWhy.why1,
-          why2: result.fiveWhys[1] || fiveWhy.why2,
-          why3: result.fiveWhys[2] || fiveWhy.why3,
-          why4: result.fiveWhys[3] || fiveWhy.why4,
-          why5: result.fiveWhys[4] || fiveWhy.why5,
-          rootCause: result.rootCauseHypothesis || result.fiveWhys[4],
-          completed: true,
-        };
-        setFiveWhy(updated5Why);
-      }
-
-      // Add suggested countermeasures if not already present
-      const newCountermeasures: Countermeasure[] = [...defect.countermeasures];
-      if (result.containmentAction && !newCountermeasures.some((c) => c.type === 'containment')) {
-        newCountermeasures.push({
-          id: `cm-${Date.now()}-1`,
-          type: 'containment',
-          title: 'Immediate Containment (ICA)',
-          description: result.containmentAction,
-          assignedTo: currentUser.name,
-          targetDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-          status: 'in_progress',
-          effectivenessPercent: 90,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-      if (result.correctiveAction && !newCountermeasures.some((c) => c.type === 'corrective')) {
-        newCountermeasures.push({
-          id: `cm-${Date.now()}-2`,
-          type: 'corrective',
-          title: 'Permanent Corrective Action (PCA)',
-          description: result.correctiveAction,
-          assignedTo: 'Process Engineering Lead',
-          targetDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
-          status: 'pending',
-          effectivenessPercent: 95,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-      if (result.preventiveAction && !newCountermeasures.some((c) => c.type === 'preventive')) {
-        newCountermeasures.push({
-          id: `cm-${Date.now()}-3`,
-          type: 'preventive',
-          title: 'Preventive Poka-Yoke & SWI Update',
-          description: result.preventiveAction,
-          assignedTo: 'Quality Assurance Lead',
-          targetDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-          status: 'pending',
-          effectivenessPercent: 100,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      const updated: Defect = {
+      const response = await analyzeDefectWithAI(defect);
+      const res = response.result;
+      
+      const updatedDefect: Defect = {
         ...defect,
         aiAnalysis: {
-          summary: result.summary,
-          rootCauseHypothesis: result.rootCauseHypothesis,
-          containmentAction: result.containmentAction,
-          correctiveAction: result.correctiveAction,
-          preventiveAction: result.preventiveAction,
-          verificationMethod: result.verificationMethod,
-          recommendedTimelineHours: result.recommendedTimelineHours,
-          source: result.source,
+          summary: res.summary,
+          rootCauseHypothesis: res.rootCauseHypothesis,
+          containmentAction: res.containmentAction,
+          correctiveAction: res.correctiveAction,
+          preventiveAction: res.preventiveAction,
+          verificationMethod: res.verificationMethod,
+          recommendedTimelineHours: res.recommendedTimelineHours || 24,
+          source: res.source || 'AI Expert',
         },
-        countermeasures: newCountermeasures,
-        fiveWhy: {
-          ...fiveWhy,
-          rootCause: result.rootCauseHypothesis,
-          completed: true,
-        },
-        status: defect.status === 'open' ? 'investigating' : defect.status,
         updatedAt: new Date().toISOString(),
       };
 
-      onUpdateDefect(updated);
-    } catch (err) {
-      console.error(err);
+      // Automatically fill empty 5-Why steps from AI if not filled
+      if (res.fiveWhys && res.fiveWhys.length >= 5 && !fiveWhy.completed) {
+        const aiFiveWhy: FiveWhyAnalysis = {
+          why1: res.fiveWhys[0] || '',
+          why2: res.fiveWhys[1] || '',
+          why3: res.fiveWhys[2] || '',
+          why4: res.fiveWhys[3] || '',
+          why5: res.fiveWhys[4] || '',
+          rootCause: res.rootCauseHypothesis || '',
+          completed: true,
+        };
+        updatedDefect.fiveWhy = aiFiveWhy;
+        setFiveWhy(aiFiveWhy);
+      }
+
+      onUpdateDefect(updatedDefect);
+    } catch (err: any) {
+      setAiError(err.message || 'AI analysis failed');
     } finally {
       setIsAiLoading(false);
     }
   };
 
   const handleSaveFiveWhy = () => {
+    const isComplete = Boolean(fiveWhy.why1 && fiveWhy.why2 && fiveWhy.rootCause);
     const updated: Defect = {
       ...defect,
-      fiveWhy: { ...fiveWhy, completed: true },
+      fiveWhy: {
+        ...fiveWhy,
+        completed: isComplete,
+      },
       status: defect.status === 'open' ? 'investigating' : defect.status,
       updatedAt: new Date().toISOString(),
     };
     onUpdateDefect(updated);
   };
 
-  const handleAddFishboneFactor = () => {
-    if (!newFactorText.trim()) return;
-    const updatedFishbone = {
+  const handleAddFishboneItem = () => {
+    if (!newFishboneInput.text.trim()) return;
+    const updated = {
       ...fishbone,
-      [newFactorCategory]: [...fishbone[newFactorCategory], newFactorText.trim()],
+      [newFishboneInput.category]: [...fishbone[newFishboneInput.category], newFishboneInput.text.trim()],
     };
-    setFishbone(updatedFishbone);
-    setNewFactorText('');
-
-    const updated: Defect = {
+    setFishbone(updated);
+    setNewFishboneInput({ ...newFishboneInput, text: '' });
+    onUpdateDefect({
       ...defect,
-      fishbone: updatedFishbone,
+      fishbone: updated,
       updatedAt: new Date().toISOString(),
-    };
-    onUpdateDefect(updated);
+    });
   };
 
   const handleAddCountermeasure = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCmTitle.trim()) return;
+    if (!cmForm.title.trim() || !cmForm.description.trim()) return;
 
     const newCm: Countermeasure = {
-      id: `cm-${Date.now()}`,
-      type: newCmType,
-      title: newCmTitle,
-      description: newCmDesc || newCmTitle,
-      assignedTo: newCmAssignee,
-      targetDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+      id: 'cm_' + Date.now(),
+      type: cmForm.type,
+      title: cmForm.title.trim(),
+      description: cmForm.description.trim(),
+      assignedTo: cmForm.assignedTo,
+      targetDate: cmForm.targetDate,
       status: 'in_progress',
-      effectivenessPercent: 80,
+      effectivenessPercent: 85,
       updatedAt: new Date().toISOString(),
     };
 
-    const updated: Defect = {
+    const updatedDefect: Defect = {
       ...defect,
-      countermeasures: [newCm, ...defect.countermeasures],
+      countermeasures: [...defect.countermeasures, newCm],
       status: defect.status === 'open' || defect.status === 'investigating' ? 'countermeasure_proposed' : defect.status,
       updatedAt: new Date().toISOString(),
     };
 
-    onUpdateDefect(updated);
-    setNewCmTitle('');
-    setNewCmDesc('');
+    onUpdateDefect(updatedDefect);
+    setShowAddCm(false);
+    setCmForm({
+      type: 'containment',
+      title: '',
+      description: '',
+      assignedTo: currentUserName,
+      targetDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+    });
   };
 
-  const handleUpdateCountermeasureStatus = (
-    cmId: string, 
-    newStatus: Countermeasure['status'], 
-    newEff?: number
-  ) => {
+  const handleUpdateCmStatus = (cmId: string, status: Countermeasure['status']) => {
     const updatedCms = defect.countermeasures.map((c) =>
-      c.id === cmId
-        ? {
-            ...c,
-            status: newStatus,
-            effectivenessPercent: newEff !== undefined ? newEff : c.effectivenessPercent,
-            approvedBy: newStatus === 'verified' ? currentUser.name : c.approvedBy,
-            updatedAt: new Date().toISOString(),
-          }
-        : c
+      c.id === cmId ? { ...c, status, updatedAt: new Date().toISOString() } : c
     );
-
-    // If all verified, auto-upgrade defect status
     const allVerified = updatedCms.length > 0 && updatedCms.every((c) => c.status === 'verified');
 
-    const updated: Defect = {
+    onUpdateDefect({
       ...defect,
       countermeasures: updatedCms,
       status: allVerified ? 'verified' : defect.status,
       updatedAt: new Date().toISOString(),
-    };
-
-    onUpdateDefect(updated);
+    });
   };
 
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddComment = () => {
     if (!commentText.trim()) return;
-
-    const newComment = {
-      id: `c-${Date.now()}`,
-      author: currentUser.name,
-      role: currentUser.role,
+    const newComment: DefectComment = {
+      id: 'cmt_' + Date.now(),
+      author: currentUserName,
+      role: currentUserRole,
       text: commentText.trim(),
       timestamp: new Date().toISOString(),
-      isSupervisorNote: currentUser.role === 'supervisor' || currentUser.role === 'manager',
+      isSupervisorNote: currentUserRole === 'supervisor' || currentUserRole === 'manager',
     };
 
-    const updated: Defect = {
+    onUpdateDefect({
       ...defect,
       comments: [...defect.comments, newComment],
       updatedAt: new Date().toISOString(),
-    };
-
-    onUpdateDefect(updated);
+    });
     setCommentText('');
   };
 
-  const handleChangeStatus = (status: DefectStatus) => {
-    const updated: Defect = {
+  const handleStatusChange = (newStatus: DefectStatus) => {
+    onUpdateDefect({
       ...defect,
-      status,
+      status: newStatus,
       updatedAt: new Date().toISOString(),
-    };
-    onUpdateDefect(updated);
+    });
+  };
+
+  const handleToggleAndon = () => {
+    onUpdateDefect({
+      ...defect,
+      andonTriggered: !defect.andonTriggered,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-slate-100">
-        {/* Header Bar */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span
-              className={`px-2.5 py-1 rounded text-xs font-mono font-bold uppercase tracking-wider ${
-                defect.severity === 'critical'
-                  ? 'bg-red-950/80 text-red-400 border border-red-800/80'
-                  : defect.severity === 'major'
-                  ? 'bg-amber-950/80 text-amber-400 border border-amber-800/80'
-                  : 'bg-cyan-950/80 text-cyan-400 border border-cyan-800/80'
-              }`}
-            >
-              {defect.severity}
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-amber-400 font-semibold">{defect.defectCode}</span>
-                <span className="text-slate-600">·</span>
-                <span className="text-xs text-slate-400">{defect.station}</span>
-              </div>
-              <h2 className="text-base font-bold text-white line-clamp-1">{defect.title}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 w-full max-w-4xl max-h-[92vh] flex flex-col my-auto shadow-2xl">
+        
+        {/* Header */}
+        <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                {defect.defectCode}
+              </span>
+              <span className="text-xs uppercase font-mono text-zinc-400">
+                VIN: {defect.vinOrUnitId}
+              </span>
+              <span className="text-xs font-mono text-zinc-400">
+                Station: {defect.station}
+              </span>
             </div>
+            <h2 className="text-base font-bold text-zinc-100">{defect.title}</h2>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Status Selector */}
-            <select
-              value={defect.status}
-              onChange={(e) => handleChangeStatus(e.target.value as DefectStatus)}
-              className="bg-slate-800 text-xs font-medium text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
-            >
-              <option value="open">Open</option>
-              <option value="investigating">Investigating</option>
-              <option value="countermeasure_proposed">Countermeasure Proposed</option>
-              <option value="verified">Verified & Tested</option>
-              <option value="closed">Closed & Standardized</option>
-            </select>
-
             <button
-              onClick={() => onOpenReport(defect)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-              title="Print 8D Quality Report"
+              onClick={() => onOpen8DReport(defect)}
+              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono flex items-center gap-1.5 border border-zinc-700"
             >
-              <Printer className="w-4 h-4" />
+              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Full 8D Dossier</span>
             </button>
-
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Navigation Tabs (8D Stages) */}
-        <div className="px-6 bg-slate-950/50 border-b border-slate-800 flex items-center gap-6 overflow-x-auto text-xs font-medium">
+        {/* Status & Andon Action Bar */}
+        <div className="p-3 bg-zinc-100 dark:bg-zinc-950/60 border-b border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-zinc-500 dark:text-zinc-400 uppercase text-[11px]">Workflow Status:</span>
+            <select
+              value={defect.status}
+              onChange={(e) => handleStatusChange(e.target.value as DefectStatus)}
+              className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono font-semibold"
+            >
+              <option value="open">1. Open</option>
+              <option value="investigating">2. Investigating (5-Why)</option>
+              <option value="countermeasure_proposed">3. Countermeasure Proposed</option>
+              <option value="verified">4. Verified Quality</option>
+              <option value="closed">5. Closed & Archived</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleAndon}
+              className={`px-3 py-1 text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors ${
+                defect.andonTriggered
+                  ? 'bg-rose-600 text-white animate-pulse'
+                  : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{defect.andonTriggered ? 'ANDON STOP ACTIVE (Click to Clear)' : 'Trigger Andon Alert'}</span>
+            </button>
+
+            <button
+              onClick={handleRunAiAnalysis}
+              disabled={isAiLoading}
+              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-mono font-semibold flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isAiLoading ? 'Analyzing...' : 'AI Kaizen Advisor'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 text-xs font-mono overflow-x-auto">
           <button
-            onClick={() => setActiveTab('countermeasures')}
-            className={`py-3 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'countermeasures'
-                ? 'text-amber-400 border-b-2 border-amber-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setActiveTab('containment')}
+            className={`px-4 py-2.5 border-b-2 font-semibold whitespace-nowrap transition-colors ${
+              activeTab === 'containment'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
             }`}
           >
-            <Wrench className="w-3.5 h-3.5" />
-            <span>Countermeasures ({defect.countermeasures.length})</span>
+            D3 Containment & AI
           </button>
-
           <button
-            onClick={() => setActiveTab('fiveWhy')}
-            className={`py-3 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'fiveWhy'
-                ? 'text-amber-400 border-b-2 border-amber-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setActiveTab('five_why')}
+            className={`px-4 py-2.5 border-b-2 font-semibold whitespace-nowrap transition-colors ${
+              activeTab === 'five_why'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>5-Why Root Cause</span>
+            D4 5-Why Ladder ({fiveWhy.completed ? 'Complete' : 'Pending'})
           </button>
-
           <button
             onClick={() => setActiveTab('fishbone')}
-            className={`py-3 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 border-b-2 font-semibold whitespace-nowrap transition-colors ${
               activeTab === 'fishbone'
-                ? 'text-amber-400 border-b-2 border-amber-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
             }`}
           >
-            <span>Ishikawa Fishbone</span>
+            Ishikawa 6M Diagram
           </button>
-
           <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-3 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'overview'
-                ? 'text-amber-400 border-b-2 border-amber-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setActiveTab('countermeasures')}
+            className={`px-4 py-2.5 border-b-2 font-semibold whitespace-nowrap transition-colors ${
+              activeTab === 'countermeasures'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Defect Details & Photo</span>
+            D5/D6 Countermeasures ({defect.countermeasures.length})
           </button>
-
           <button
-            onClick={() => setActiveTab('discussion')}
-            className={`py-3 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'discussion'
-                ? 'text-amber-400 border-b-2 border-amber-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setActiveTab('comments')}
+            className={`px-4 py-2.5 border-b-2 font-semibold whitespace-nowrap transition-colors ${
+              activeTab === 'comments'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
             }`}
           >
-            <span>Team Discussion ({defect.comments.length})</span>
+            Shift Log ({defect.comments.length})
           </button>
         </div>
 
         {/* Tab Content Body */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* AI Kaizen Quick Recommendation Banner */}
-          <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-950 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-amber-300">
-                  Automotive Kaizen 8D Intelligence
-                </h4>
-                <p className="text-xs text-slate-300 mt-0.5 max-w-xl">
-                  {defect.aiAnalysis?.summary ||
-                    'Run AI root-cause analysis to calculate 5-Why progression, immediate interim containment (ICA), and permanent corrective actions (PCA).'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleRunAiKaizen}
-              disabled={isAiLoading}
-              className="px-3.5 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0 transition-all shadow"
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${isAiLoading ? 'animate-spin' : ''}`} />
-              <span>{isAiLoading ? 'Analyzing...' : 'Generate Kaizen Plan'}</span>
-            </button>
-          </div>
-
-          {/* TAB 1: COUNTERMEASURES */}
-          {activeTab === 'countermeasures' && (
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6 text-sm">
+          
+          {/* TAB 1: Containment & AI Advice */}
+          {activeTab === 'containment' && (
             <div className="space-y-6">
-              {/* Add New Countermeasure Form */}
-              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800">
-                <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-amber-400" />
-                  <span>Propose New Countermeasure / Action Item</span>
-                </h4>
-                <form onSubmit={handleAddCountermeasure} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">Type</label>
-                      <select
-                        value={newCmType}
-                        onChange={(e: any) => setNewCmType(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                      >
-                        <option value="containment">Immediate Containment (ICA)</option>
-                        <option value="corrective">Permanent Corrective (PCA)</option>
-                        <option value="preventive">Preventive Kaizen (Poka-Yoke)</option>
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-slate-400 mb-1">Action Title *</label>
-                      <input
-                        type="text"
-                        required
-                        value={newCmTitle}
-                        onChange={(e) => setNewCmTitle(e.target.value)}
-                        placeholder="e.g. Add thread protective silicone plug during weld"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Execution Steps & Verification Protocol</label>
-                    <textarea
-                      rows={2}
-                      value={newCmDesc}
-                      onChange={(e) => setNewCmDesc(e.target.value)}
-                      placeholder="Detail who executes, torque/measurement criteria, sample verification size..."
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span>Owner:</span>
-                      <input
-                        type="text"
-                        value={newCmAssignee}
-                        onChange={(e) => setNewCmAssignee(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors"
-                    >
-                      Add Action Item
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Countermeasure List */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Active Countermeasures & Effectiveness
-                </h4>
-
-                {defect.countermeasures.length === 0 ? (
-                  <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
-                    No countermeasures logged yet. Click &quot;Generate Kaizen Plan&quot; above or propose an action manually.
-                  </div>
-                ) : (
-                  defect.countermeasures.map((cm) => {
-                    const typeBadge = {
-                      containment: 'bg-red-950/60 text-red-400 border border-red-800/60',
-                      corrective: 'bg-amber-950/60 text-amber-400 border border-amber-800/60',
-                      preventive: 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60',
-                    }[cm.type];
-
-                    return (
-                      <div
-                        key={cm.id}
-                        className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all space-y-3"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold ${typeBadge}`}>
-                              {cm.type}
-                            </span>
-                            <h5 className="text-sm font-bold text-white">{cm.title}</h5>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400">Status:</span>
-                            <select
-                              value={cm.status}
-                              onChange={(e) => handleUpdateCountermeasureStatus(cm.id, e.target.value as any)}
-                              className="bg-slate-900 text-xs border border-slate-700 rounded px-2 py-1 text-slate-200"
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="in_progress">In Progress</option>
-                              <option value="implemented">Implemented</option>
-                              <option value="verified">Verified (Closed)</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-slate-300">{cm.description}</p>
-
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
-                          <div>
-                            <span>Owner: </span>
-                            <span className="text-slate-200 font-medium">{cm.assignedTo}</span>
-                            <span className="mx-2">·</span>
-                            <span>Target: </span>
-                            <span className="text-slate-200 font-mono">{cm.targetDate}</span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                              <span>Effectiveness:</span>
-                              <span className="font-mono font-bold text-amber-400">
-                                {cm.effectivenessPercent || 85}%
-                              </span>
-                            </div>
-
-                            {cm.status !== 'verified' && (
-                              <button
-                                onClick={() => handleUpdateCountermeasureStatus(cm.id, 'verified', 100)}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium text-[11px] flex items-center gap-1 transition-colors"
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Verify & Sign-off</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: 5-WHY ROOT CAUSE ANALYSIS */}
-          {activeTab === 'fiveWhy' && (
-            <div className="space-y-5">
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    5-Why Problem Solving Ladder (IATF 16949 / Lean Kaizen)
-                  </h4>
-                  <button
-                    onClick={handleRunAiKaizen}
-                    disabled={isAiLoading}
-                    className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Auto-Populate 5-Why</span>
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {[
-                    { label: 'Why 1 (Direct Phenomenon)', field: 'why1' },
-                    { label: 'Why 2 (Technical Mechanism)', field: 'why2' },
-                    { label: 'Why 3 (Process / Tool Variance)', field: 'why3' },
-                    { label: 'Why 4 (Execution / Detection Lapse)', field: 'why4' },
-                    { label: 'Why 5 (Systemic / Root Cause)', field: 'why5' },
-                  ].map((step, idx) => (
-                    <div key={step.field} className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-slate-800 text-amber-400 font-mono text-xs flex items-center justify-center shrink-0 mt-1">
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-[11px] font-semibold text-slate-400 mb-0.5">
-                          {step.label}
-                        </label>
-                        <input
-                          type="text"
-                          value={(fiveWhy as any)[step.field] || ''}
-                          onChange={(e) => setFiveWhy({ ...fiveWhy, [step.field]: e.target.value })}
-                          placeholder={`Enter response for step ${idx + 1}...`}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="pt-2 border-t border-slate-800">
-                    <label className="block text-xs font-bold text-amber-400 mb-1">
-                      Final Verified Root Cause:
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={fiveWhy.rootCause || ''}
-                      onChange={(e) => setFiveWhy({ ...fiveWhy, rootCause: e.target.value })}
-                      placeholder="Summarize fundamental systemic breakdown..."
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  <button
-                    onClick={handleSaveFiveWhy}
-                    className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>Save 5-Why Analysis</span>
-                  </button>
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                <span className="font-mono text-xs text-zinc-500 uppercase font-semibold">
+                  Primary Defect Description & In-Station Finding
+                </span>
+                <p className="text-zinc-800 dark:text-zinc-200 leading-relaxed font-sans">
+                  {defect.description}
+                </p>
+                <div className="pt-2 flex flex-wrap items-center gap-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>Part No: {defect.partNumber || 'N/A'}</span>
+                  <span>•</span>
+                  <span>Zone: {defect.vehicleZone}</span>
+                  <span>•</span>
+                  <span>Reported by: {defect.reportedBy}</span>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* TAB 3: ISHIKAWA FISHBONE */}
-          {activeTab === 'fishbone' && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Ishikawa Fishbone Diagram (6M Analysis)
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    Map potential contributing causes across Man, Machine, Method, Material, Measurement, and Milieu.
+              {/* AI Quality Advisor Output Box */}
+              {defect.aiAnalysis ? (
+                <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-800/80 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400 font-mono text-xs font-bold uppercase">
+                      <Sparkles className="w-4 h-4" />
+                      <span>{defect.aiAnalysis.source}</span>
+                    </div>
+                    <span className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
+                      Target SLA: {defect.aiAnalysis.recommendedTimelineHours}h
+                    </span>
+                  </div>
+
+                  <p className="text-zinc-900 dark:text-zinc-100 font-medium">
+                    {defect.aiAnalysis.summary}
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-3 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-900/60 space-y-1">
+                      <span className="font-mono text-rose-700 dark:text-rose-400 uppercase font-bold text-[10px]">
+                        Immediate Containment (ICA)
+                      </span>
+                      <p className="text-zinc-700 dark:text-zinc-300">{defect.aiAnalysis.containmentAction}</p>
+                    </div>
+
+                    <div className="p-3 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-900/60 space-y-1">
+                      <span className="font-mono text-purple-700 dark:text-purple-400 uppercase font-bold text-[10px]">
+                        Permanent Corrective (PCA)
+                      </span>
+                      <p className="text-zinc-700 dark:text-zinc-300">{defect.aiAnalysis.correctiveAction}</p>
+                    </div>
+
+                    <div className="p-3 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-900/60 space-y-1">
+                      <span className="font-mono text-blue-700 dark:text-blue-400 uppercase font-bold text-[10px]">
+                        Preventive Poka-Yoke Kaizen
+                      </span>
+                      <p className="text-zinc-700 dark:text-zinc-300">{defect.aiAnalysis.preventiveAction}</p>
+                    </div>
+
+                    <div className="p-3 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-900/60 space-y-1">
+                      <span className="font-mono text-amber-700 dark:text-amber-400 uppercase font-bold text-[10px]">
+                        Quality Verification Protocol
+                      </span>
+                      <p className="text-zinc-700 dark:text-zinc-300">{defect.aiAnalysis.verificationMethod}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-center space-y-2">
+                  <Lightbulb className="w-8 h-8 mx-auto text-amber-500" />
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    Generate Automotive Kaizen Analysis
+                  </p>
+                  <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                    Click "AI Kaizen Advisor" in the top bar to synthesize instant containment steps, 5-Why hypothesis, and IATF 16949 countermeasures.
                   </p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: Five Why Ladder */}
+          {activeTab === 'five_why' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                <span className="text-xs font-mono font-semibold uppercase text-zinc-700 dark:text-zinc-300">
+                  Toyota Production System (TPS) 5-Why Root Cause Drill-down
+                </span>
+                <button
+                  onClick={handleSaveFiveWhy}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-mono font-semibold transition-colors"
+                >
+                  Save 5-Why Analysis
+                </button>
               </div>
 
-              {/* Add factor */}
-              <div className="flex items-center gap-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <select
-                  value={newFactorCategory}
-                  onChange={(e) => setNewFactorCategory(e.target.value as keyof FishboneFactors)}
-                  className="bg-slate-900 border border-slate-700 text-xs text-white rounded px-2.5 py-1.5"
-                >
-                  <option value="man">Man (Personnel)</option>
-                  <option value="machine">Machine (Tooling)</option>
-                  <option value="method">Method (Process)</option>
-                  <option value="material">Material (Parts)</option>
-                  <option value="measurement">Measurement (Gauge)</option>
-                  <option value="milieu">Milieu (Environment)</option>
-                </select>
-                <input
-                  type="text"
-                  value={newFactorText}
-                  onChange={(e) => setNewFactorText(e.target.value)}
-                  placeholder="Add specific cause factor..."
-                  className="flex-1 bg-slate-900 border border-slate-700 text-xs text-white rounded px-3 py-1.5"
+              {[1, 2, 3, 4, 5].map((lvl) => {
+                const key = `why${lvl}` as keyof FiveWhyAnalysis;
+                return (
+                  <div key={lvl} className="flex items-start gap-3">
+                    <span className="w-8 h-8 flex items-center justify-center font-mono text-xs font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shrink-0">
+                      W{lvl}
+                    </span>
+                    <div className="flex-1">
+                      <label className="block text-[11px] font-mono text-zinc-500 mb-1">
+                        Why did this happen? (Level {lvl})
+                      </label>
+                      <input
+                        type="text"
+                        value={(fiveWhy[key] as string) || ''}
+                        onChange={(e) => setFiveWhy({ ...fiveWhy, [key]: e.target.value })}
+                        placeholder={`Enter why response ${lvl}...`}
+                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-sans text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="pt-2">
+                <label className="block text-xs font-mono font-bold text-rose-600 dark:text-rose-400 mb-1 uppercase">
+                  Identified True Root Cause (Actionable Kaizen Target):
+                </label>
+                <textarea
+                  rows={2}
+                  value={fiveWhy.rootCause || ''}
+                  onChange={(e) => setFiveWhy({ ...fiveWhy, rootCause: e.target.value })}
+                  placeholder="Summarize the core systemic failure (e.g., absence of automated torque interlock on station 4)..."
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-rose-300 dark:border-rose-900 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-rose-500"
                 />
-                <button
-                  onClick={handleAddFishboneFactor}
-                  className="px-3 py-1.5 bg-amber-400 text-slate-950 font-bold text-xs rounded"
-                >
-                  Add
-                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Fishbone Ishikawa 6M Diagram */}
+          {activeTab === 'fishbone' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                <span className="text-xs font-mono font-semibold uppercase text-zinc-700 dark:text-zinc-300">
+                  Ishikawa 6M Cause-and-Effect Factor Matrix
+                </span>
+                
+                {/* Add factor input */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={newFishboneInput.category}
+                    onChange={(e) => setNewFishboneInput({ ...newFishboneInput, category: e.target.value as keyof FishboneFactors })}
+                    className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-xs font-mono"
+                  >
+                    <option value="man">Man (Personnel)</option>
+                    <option value="machine">Machine (Tooling)</option>
+                    <option value="method">Method (SOP)</option>
+                    <option value="material">Material (Parts)</option>
+                    <option value="measurement">Measurement (Gages)</option>
+                    <option value="milieu">Milieu (Environment)</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={newFishboneInput.text}
+                    onChange={(e) => setNewFishboneInput({ ...newFishboneInput, text: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddFishboneItem()}
+                    placeholder="Contributory factor..."
+                    className="px-2.5 py-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-mono"
+                  />
+                  <button
+                    onClick={handleAddFishboneItem}
+                    className="px-2.5 py-1 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-mono font-semibold"
+                  >
+                    + Add
+                  </button>
+                </div>
               </div>
 
               {/* 6M Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
-                  { key: 'man', label: 'Man (Operator / Shift)' },
-                  { key: 'machine', label: 'Machine (Spindle / Robot)' },
-                  { key: 'method', label: 'Method (Standard Work)' },
-                  { key: 'material', label: 'Material (Supplier / Coating)' },
-                  { key: 'measurement', label: 'Measurement (Gauge / Sensor)' },
-                  { key: 'milieu', label: 'Milieu (Humidity / Temp)' },
-                ].map((cat) => (
-                  <div key={cat.key} className="p-3 rounded-lg bg-slate-950/70 border border-slate-800">
-                    <span className="text-[11px] font-bold text-amber-400 uppercase">{cat.label}</span>
-                    <ul className="mt-2 space-y-1.5 text-xs text-slate-300">
-                      {(fishbone as any)[cat.key]?.map((factor: string, i: number) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <span className="text-slate-600">›</span>
-                          <span>{factor}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                  { key: 'man', label: '1. Man (Operator / Training)', color: 'border-l-blue-500' },
+                  { key: 'machine', label: '2. Machine (Tooling / Calibration)', color: 'border-l-emerald-500' },
+                  { key: 'method', label: '3. Method (SWI / Work Cycle)', color: 'border-l-purple-500' },
+                  { key: 'material', label: '4. Material (Component Specs)', color: 'border-l-amber-500' },
+                  { key: 'measurement', label: '5. Measurement (Calibration / Sensor)', color: 'border-l-cyan-500' },
+                  { key: 'milieu', label: '6. Milieu (Shop Floor / Temperature)', color: 'border-l-rose-500' },
+                ].map(({ key, label, color }) => {
+                  const items = fishbone[key as keyof FishboneFactors] || [];
+                  return (
+                    <div
+                      key={key}
+                      className={`p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 border-l-4 ${color} space-y-2`}
+                    >
+                      <h4 className="text-[11px] font-mono font-bold uppercase text-zinc-800 dark:text-zinc-200">
+                        {label}
+                      </h4>
+                      {items.length === 0 ? (
+                        <p className="text-[11px] text-zinc-400 italic">No factors recorded yet.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {items.map((item, idx) => (
+                            <li
+                              key={idx}
+                              className="text-xs text-zinc-700 dark:text-zinc-300 flex items-start gap-1.5"
+                            >
+                              <span className="text-zinc-400 font-mono">•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* TAB 4: DEFECT DETAILS & PHOTO */}
-          {activeTab === 'overview' && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                      Specification & Metadata
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <span className="text-slate-400">Assembly Line:</span>
-                        <p className="font-semibold text-white">{defect.line}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Station:</span>
-                        <p className="font-semibold text-white">{defect.station}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">VIN / Chassis:</span>
-                        <p className="font-mono text-amber-400">{defect.vinOrUnitId}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Part Number:</span>
-                        <p className="font-mono text-slate-200">{defect.partNumber || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Reported By:</span>
-                        <p className="text-slate-200">{defect.reportedBy}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Logged At:</span>
-                        <p className="text-slate-200 font-mono text-[11px]">
-                          {new Date(defect.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2">
-                      Defect Observation
-                    </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed">{defect.description}</p>
-                  </div>
-                </div>
-
-                {/* Evidence Photo */}
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col items-center">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3 w-full text-left">
-                    Inspection Evidence Photo
-                  </h4>
-                  <div className="relative rounded-lg overflow-hidden border border-slate-700 w-full aspect-video bg-black">
-                    <img
-                      src={defect.imageUrl || '/src/assets/images/automotive_assembly_plant_1794069669601.jpg'}
-                      alt="Defect visual"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/70 rounded text-[10px] font-mono text-white">
-                      ZONE: {defect.vehicleZone.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: DISCUSSION & COMMENTS */}
-          {activeTab === 'discussion' && (
+          {/* TAB 4: Countermeasures Tracker */}
+          {activeTab === 'countermeasures' && (
             <div className="space-y-4">
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
-                {defect.comments.map((c) => (
-                  <div
-                    key={c.id}
-                    className={`p-3 rounded-xl border text-xs ${
-                      c.isSupervisorNote
-                        ? 'bg-amber-950/30 border-amber-800/60'
-                        : 'bg-slate-950/70 border-slate-800'
-                    }`}
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                <span className="text-xs font-mono font-semibold uppercase text-zinc-700 dark:text-zinc-300">
+                  D5/D6 Action Tracker (ICA, PCA & Error-Proofing Poka-Yoke)
+                </span>
+                <button
+                  onClick={() => setShowAddCm(!showAddCm)}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-mono font-semibold flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{showAddCm ? 'Cancel' : '+ New Countermeasure'}</span>
+                </button>
+              </div>
+
+              {/* Add form */}
+              {showAddCm && (
+                <form
+                  onSubmit={handleAddCountermeasure}
+                  className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 space-y-3"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-mono text-zinc-500 mb-1">Action Type</label>
+                      <select
+                        value={cmForm.type}
+                        onChange={(e) => setCmForm({ ...cmForm, type: e.target.value as any })}
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono"
+                      >
+                        <option value="containment">ICA (Containment)</option>
+                        <option value="corrective">PCA (Corrective)</option>
+                        <option value="preventive">Poka-Yoke (Preventive)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-mono text-zinc-500 mb-1">Assignee</label>
+                      <input
+                        type="text"
+                        value={cmForm.assignedTo}
+                        onChange={(e) => setCmForm({ ...cmForm, assignedTo: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-sans"
+                        placeholder="e.g. Line Lead / Engineer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-mono text-zinc-500 mb-1">Target Date</label>
+                      <input
+                        type="date"
+                        value={cmForm.targetDate}
+                        onChange={(e) => setCmForm({ ...cmForm, targetDate: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono text-zinc-500 mb-1">Action Title</label>
+                    <input
+                      type="text"
+                      value={cmForm.title}
+                      onChange={(e) => setCmForm({ ...cmForm, title: e.target.value })}
+                      placeholder="e.g. Install optical sensor to prevent unseated harness CPA"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-sans"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono text-zinc-500 mb-1">Action Protocol</label>
+                    <textarea
+                      rows={2}
+                      value={cmForm.description}
+                      onChange={(e) => setCmForm({ ...cmForm, description: e.target.value })}
+                      placeholder="Step-by-step engineering implementation details..."
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-sans"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-semibold"
                   >
-                    <div className="flex items-center justify-between text-[11px] mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white">{c.author}</span>
-                        <span className="text-slate-500">·</span>
-                        <span className="font-mono text-slate-400 uppercase text-[10px]">{c.role}</span>
-                        {c.isSupervisorNote && (
-                          <span className="text-[10px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded">
-                            Supervisor Note
+                    Save Countermeasure
+                  </button>
+                </form>
+              )}
+
+              {/* List of existing countermeasures */}
+              <div className="space-y-3">
+                {defect.countermeasures.length === 0 ? (
+                  <p className="p-8 text-center text-xs text-zinc-400 font-mono">
+                    No countermeasures logged yet. Use "+ New Countermeasure" or run "AI Kaizen Advisor".
+                  </p>
+                ) : (
+                  defect.countermeasures.map((cm) => (
+                    <div
+                      key={cm.id}
+                      className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-mono text-[10px] uppercase px-2 py-0.5 font-bold ${
+                              cm.type === 'containment'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                : cm.type === 'corrective'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            }`}
+                          >
+                            {cm.type}
+                          </span>
+                          <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{cm.title}</h4>
+                        </div>
+
+                        {/* Status selector */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[11px] text-zinc-500">Status:</span>
+                          <select
+                            value={cm.status}
+                            onChange={(e) => handleUpdateCmStatus(cm.id, e.target.value as any)}
+                            className="px-2 py-0.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-[11px] font-mono"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In-Progress</option>
+                            <option value="implemented">Implemented</option>
+                            <option value="verified">Verified (Pass)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-zinc-700 dark:text-zinc-300">{cm.description}</p>
+
+                      <div className="flex items-center justify-between font-mono text-[11px] text-zinc-500 pt-1 border-t border-zinc-200 dark:border-zinc-800">
+                        <span>Assigned: {cm.assignedTo}</span>
+                        <span>Target: {cm.targetDate}</span>
+                        {cm.effectivenessPercent && (
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            Effectiveness: {cm.effectivenessPercent}%
                           </span>
                         )}
                       </div>
-                      <span className="text-slate-500 font-mono text-[10px]">
-                        {new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
                     </div>
-                    <p className="text-slate-300">{c.text}</p>
-                  </div>
-                ))}
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: Shift Log & Operator/Supervisor Comments */}
+          {activeTab === 'comments' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                <span className="text-xs font-mono font-semibold uppercase text-zinc-700 dark:text-zinc-300">
+                  Real-time Shift Collaboration & Engineering Notes
+                </span>
               </div>
 
-              <form onSubmit={handleAddComment} className="flex gap-2 pt-2">
+              {/* Comments Feed */}
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {defect.comments.length === 0 ? (
+                  <p className="text-xs text-zinc-400 font-mono py-6 text-center">
+                    No shift comments yet. Leave a hand-off note or escalation log below.
+                  </p>
+                ) : (
+                  defect.comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className={`p-3 border text-xs space-y-1 ${
+                        comment.isSupervisorNote
+                          ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/60'
+                          : 'bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-mono text-[11px]">
+                        <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                          {comment.author} ({comment.role.toUpperCase()})
+                        </span>
+                        <span className="text-zinc-400">
+                          {new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-zinc-800 dark:text-zinc-200">{comment.text}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Comment Input */}
+              <div className="flex items-center gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                 <input
                   type="text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add note, verification comment, or shift handoff detail..."
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                  placeholder="Type engineering note, shift hand-off observation..."
+                  className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-sans"
                 />
                 <button
-                  type="submit"
-                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5"
+                  onClick={handleAddComment}
+                  className="px-4 py-2 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-semibold flex items-center gap-1"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Post</span>
+                  <span>Send</span>
                 </button>
-              </form>
+              </div>
             </div>
           )}
+
         </div>
+
       </div>
     </div>
   );

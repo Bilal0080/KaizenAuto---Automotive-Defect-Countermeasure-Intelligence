@@ -59,7 +59,7 @@ const INITIAL_DEFECTS: Defect[] = [
     reportedByBadge: 'OP-4829',
     createdAt: new Date(Date.now() - 3600000 * 2.5).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 0.8).toISOString(),
-    imageUrl: '/src/assets/images/vehicle_inspection_chassis_1794069669791.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&q=80&w=800',
     andonTriggered: true,
     fiveWhy: {
       why1: 'Subframe bolt reached only 82 Nm instead of 115 Nm.',
@@ -148,7 +148,7 @@ const INITIAL_DEFECTS: Defect[] = [
     reportedByBadge: 'QC-1104',
     createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 1.2).toISOString(),
-    imageUrl: '/src/assets/images/vehicle_inspection_chassis_1794069669791.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&q=80&w=800',
     andonTriggered: true,
     countermeasures: [
       {
@@ -200,7 +200,7 @@ const INITIAL_DEFECTS: Defect[] = [
     reportedByBadge: 'OP-4829',
     createdAt: new Date(Date.now() - 3600000 * 1).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-    imageUrl: '/src/assets/images/automotive_assembly_plant_1794069669601.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800',
     andonTriggered: false,
     countermeasures: [
       {
@@ -358,7 +358,6 @@ export const storage = {
       this.addToOfflineQueue({ type: 'ADD_DEFECT', payload: defect, timestamp: new Date().toISOString() });
     }
 
-    // Trigger alert if critical
     if (defect.severity === 'critical' || defect.andonTriggered) {
       this.addAlert({
         id: `alt-${Date.now()}`,
@@ -453,7 +452,7 @@ export const storage = {
       const data = localStorage.getItem(CURRENT_USER_KEY);
       if (data) return JSON.parse(data);
     } catch {}
-    return DEFAULT_USERS[0]; // Worker by default
+    return DEFAULT_USERS[0];
   },
 
   setCurrentUser(user: UserProfile): void {
@@ -516,4 +515,60 @@ export const storage = {
     this.clearOfflineQueue();
     return INITIAL_DEFECTS;
   },
+
+  getNotifications(): NotificationAlert[] {
+    return this.getAlerts();
+  },
+
+  saveNotification(alert: NotificationAlert): NotificationAlert[] {
+    return this.addAlert(alert);
+  },
+
+  clearNotifications(): NotificationAlert[] {
+    this.saveAlerts([]);
+    return [];
+  },
+
+  saveDefect(defectData: Partial<Defect>, isOffline = false): Defect {
+    const fullDefect: Defect = {
+      id: defectData.id || `def-${Date.now()}`,
+      defectCode: defectData.defectCode || `DEF-2026-${Math.floor(100 + Math.random() * 900)}`,
+      title: defectData.title || 'Untitled Defect',
+      description: defectData.description || '',
+      category: defectData.category || 'Torque & Fastener',
+      severity: defectData.severity || 'major',
+      status: defectData.status || 'open',
+      line: defectData.line || 'Chassis Line 2',
+      station: defectData.station || 'Station 14',
+      vehicleZone: defectData.vehicleZone || 'underbody_battery',
+      vinOrUnitId: defectData.vinOrUnitId || `VIN-WAUZZZ-${Math.floor(10000 + Math.random() * 90000)}`,
+      partNumber: defectData.partNumber,
+      reportedBy: defectData.reportedBy || 'Line Operator',
+      reportedByBadge: defectData.reportedByBadge || 'OP-0000',
+      createdAt: defectData.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      imageUrl: defectData.imageUrl,
+      andonTriggered: Boolean(defectData.andonTriggered),
+      countermeasures: defectData.countermeasures || [],
+      comments: defectData.comments || [],
+      fiveWhy: defectData.fiveWhy,
+      fishbone: defectData.fishbone,
+      aiAnalysis: defectData.aiAnalysis,
+    };
+
+    this.addDefect(fullDefect, isOffline);
+    return fullDefect;
+  },
+
+  getAvailableProfiles(): UserProfile[] {
+    return DEFAULT_USERS;
+  },
+
+  syncOfflineQueue(): Defect[] {
+    this.clearOfflineQueue();
+    return this.getDefects();
+  },
 };
+
+export const storageService = storage;
+

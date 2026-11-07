@@ -52,7 +52,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // Play audio confirmation beep on scan
   const playBeep = () => {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -72,7 +71,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
     } catch {}
   };
 
-  // Start real camera if available
   useEffect(() => {
     if (!isOpen || activeTab !== 'camera') {
       stopCamera();
@@ -104,7 +102,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
         }
         setHasCamera(true);
 
-        // Check for BarcodeDetector API
         if ('BarcodeDetector' in window) {
           const barcodeDetector = new (window as any).BarcodeDetector({
             formats: ['qr_code', 'code_128', 'code_39', 'data_matrix', 'ean_13'],
@@ -179,7 +176,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Simulate scanning image or parsing filename
     const simulatedCode = file.name.toUpperCase().includes('PART')
       ? 'HV-800V-CONN-A'
       : `VIN-WAUZZZ-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -256,7 +252,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
         <div className="p-5 flex-1 space-y-4">
           {activeTab === 'camera' && (
             <div className="space-y-4">
-              {/* Camera Viewport with Reticle */}
               <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center">
                 {hasCamera ? (
                   <video
@@ -266,12 +261,9 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  /* Optical Simulation Mode when device camera is restricted/simulated */
                   <div className="relative w-full h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-6 text-center select-none">
-                    {/* Background blueprint grid */}
                     <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]" />
 
-                    {/* Simulated Sample Tag in Viewport */}
                     <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-700 shadow-inner max-w-xs space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
                         <span>IATF 16949 COMPLIANT TAG</span>
@@ -297,10 +289,8 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
 
                 {/* Reticle Overlay */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  {/* Scanning Laser Line */}
                   <div className="w-48 h-0.5 bg-red-500 shadow-[0_0_12px_#ef4444] animate-pulse" />
 
-                  {/* Corner Reticle Brackets */}
                   <div className="w-56 h-40 border-2 border-amber-400/80 rounded-lg relative">
                     <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-amber-400" />
                     <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-amber-400" />
@@ -309,7 +299,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                   </div>
                 </div>
 
-                {/* Torch / Light Button */}
                 <button
                   type="button"
                   onClick={() => setTorchOn(!torchOn)}
@@ -323,7 +312,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                   )}
                 </button>
 
-                {/* Detection Badge */}
                 {scannedResult && (
                   <div className="absolute bottom-3 px-3 py-1 bg-emerald-600 text-white font-mono text-xs font-bold rounded-lg shadow-lg flex items-center gap-1.5 animate-bounce">
                     <Check className="w-3.5 h-3.5" />
@@ -332,7 +320,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                 )}
               </div>
 
-              {/* Instructions */}
               <p className="text-[11px] text-center text-slate-400">
                 Align the red scan line with the vehicle chassis QR code or part barcode.
               </p>
@@ -407,7 +394,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
             </div>
           )}
 
-          {/* Quick Manual Entry Fallback */}
           <form onSubmit={handleManualSubmit} className="pt-3 border-t border-slate-800 flex gap-2">
             <input
               type="text"
@@ -425,7 +411,6 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
             </button>
           </form>
 
-          {/* Recent Scans Strip */}
           {scanHistory.length > 0 && (
             <div className="pt-1 flex items-center gap-2 overflow-x-auto text-[10px] text-slate-400 font-mono">
               <span className="shrink-0 text-slate-500">Recent:</span>
