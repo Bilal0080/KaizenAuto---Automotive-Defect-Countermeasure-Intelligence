@@ -131,3 +131,43 @@ export interface NotificationAlert {
 }
 
 export type LanguageCode = 'en' | 'ur' | 'ur_roman' | 'de' | 'ja' | 'es';
+
+export type IatfClauseCategory = 
+  | 'Containment & Suspect Product (8.7)'
+  | 'Problem Solving & Root Cause (10.2.3)'
+  | 'Error-Proofing Poka-Yoke (10.2.4)'
+  | 'Control Plan & Standard Work (8.5.1)'
+  | 'PFMEA & Risk Analysis (8.3.5 / 9.1)'
+  | 'Measurement & Calibration (7.1.5)'
+  | 'Customer & Management Escalation (8.7.1.7)';
+
+export interface ComplianceAuditItem {
+  id: string;
+  clause: string;
+  title: string;
+  requirement: string;
+  category: IatfClauseCategory;
+  mandatoryForSeverity: 'all' | 'major_and_critical' | 'critical_only';
+  status: 'compliant' | 'pending' | 'not_applicable';
+  severityLevel: DefectSeverity;
+  evidenceNote: string;
+  verifiedBy?: string;
+  targetTimelineHours: number;
+}
+
+export interface ComplianceAuditReport {
+  auditId: string;
+  defectId: string;
+  defectCode: string;
+  auditDate: string;
+  auditorName: string;
+  standard: 'IATF 16949:2016';
+  severity: DefectSeverity;
+  category: DefectCategory;
+  complianceScorePercent: number;
+  criticalItemsPassed: boolean;
+  totalItems: number;
+  compliantCount: number;
+  pendingCount: number;
+  items: ComplianceAuditItem[];
+}
